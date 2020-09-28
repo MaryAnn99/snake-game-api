@@ -14,19 +14,28 @@ type Record struct {
 	UpdatedAt  	time.Time	`json:"updatedAt"`
 }
 
-func InsertRow(db *sql.DB, record Record) bool {
+type Result struct {
+	Data 		interface{}
+	StatusCode 	int
+}
+
+func InsertRow(db *sql.DB, record Record) Result {
+	var result Result
 	// Check if the username is unique and if the new Record is valid.
 	if checkUsernameExists(db, record.Username) || 
 	record.Username == "" || record.BestScore <= 0 {
-		return false
+		result.StatusCode = 400
+		return result
 	}
 	// Insert a row into the "tbl_record" table.
 	if _, err := db.Exec(
 		`INSERT INTO tbl_record (username, best_score, created_at, updated_at) 
 		VALUES ($1, $2, NOW(), NOW())`, record.Username, record.BestScore); err != nil {
-		panic(err)
+		result.StatusCode = 500
+		return result
 	}
-	return true
+	result.StatusCode = 201
+	return result
 }
 
 func checkUsernameExists(db *sql.DB, username string) bool {
@@ -40,64 +49,83 @@ func checkUsernameExists(db *sql.DB, username string) bool {
 				return true
 			}
 			return false
-		default:
+		default: // TODO
 			panic(err)
 	}
 }
 
-func SelectAllRows(db *sql.DB) []Record {
+func SelectAllRows(db *sql.DB) Result {
+	var result Result
 	rows, err := db.Query("SELECT id, username, best_score, created_at, updated_at FROM tbl_record order by best_score desc")
 	if err != nil {
-		panic(err)
+		result.StatusCode = 500
+		return result
 	}
 	defer rows.Close()
-	results := make([]Record, 0)
+	records := make([]Record, 0)
 	for rows.Next() {
-		var result Record
-		if err := rows.Scan(&result.Id, &result.Username, &result.BestScore,
-							&result.CreatedAt, &result.UpdatedAt); err != nil {
-			panic(err)
+		var record Record
+		if err := rows.Scan(&record.Id, &record.Username, &record.BestScore,
+							&record.CreatedAt, &record.UpdatedAt); err != nil {
+			result.StatusCode = 500
+			return result
 		}
-		results = append(results, result)
+		records = append(records, record)
 	}
-	return results
+	result.StatusCode = 200
+	result.Data = records
+	return result
 }
 
-func SelectOneRow(db *sql.DB, username string) Record {
+func SelectOneRow(db *sql.DB, username string) Result {
+	var result Result
 	row := db.QueryRow(`SELECT id, username, best_score, created_at, updated_at FROM tbl_record WHERE username=$1`, username)
 	var record Record
 	switch err := row.Scan(&record.Id, &record.Username, &record.BestScore,
 		&record.CreatedAt, &record.UpdatedAt); err {
 		case sql.ErrNoRows:
-			return record
+			result.StatusCode = 404
 		case nil:
-			return record
+			result.StatusCode = 200
+			result.Data = record
 		default:
-			panic(err)
+			result.StatusCode = 500
 	}
+	return result
 }
 
-func UpdateRow(db *sql.DB, username string, record Record) bool {
-	userRecord := SelectOneRow(db, username)
+func UpdateRow(db *sql.DB, username string, record Record) Result {
+	var result Result
+
+	row := db.QueryRow(`SELECT username, best_score FROM tbl_record WHERE username=$1`, username)
+	var userRecord Record
+	row.Scan(&userRecord.Username, &userRecord.BestScore);
 	// Check if the new score is valid and if the username exists
 	if record.BestScore <= userRecord.BestScore || userRecord.Username == "" {
-		return false
+		result.StatusCode = 400
+		return result
 	}
 	if _, err := db.Exec(`UPDATE tbl_record SET 
 	best_score = $1, updated_at = NOW() WHERE username = $2`, 
 	record.BestScore, username); err != nil {
-		panic(err)
+		result.StatusCode = 500
+		return result
 	}
-	return true
+	result.StatusCode = 200
+	return result
 }
 
-func DeleteRow(db *sql.DB, username string) bool {
+func DeleteRow(db *sql.DB, username string) Result {
+	var result Result
 	if checkUsernameExists(db, username) == false {
-		return false
+		result.StatusCode = 400
+		return result
 	}
 	if _, err := db.Exec(`DELETE from tbl_record 
 	WHERE username = $1`, username); err != nil {
-		panic(err)
+		result.StatusCode = 500
+		return result
 	}
-	return true
+	result.StatusCode = 200
+	return result
 }

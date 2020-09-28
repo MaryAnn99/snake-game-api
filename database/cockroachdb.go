@@ -5,25 +5,22 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var db *sql.DB
+var DB *sql.DB
 
 func init() {
-	var err error
-	driverName := "postgres"
-	dataSourceName  := "postgresql://root@localhost:26257/snake_game_db?sslmode=disable"
-	
-	// Connect to the "snake_game_db" database.
-	db, err = sql.Open(driverName, dataSourceName)
-	if err != nil {
-		// panic(err)
-		db = nil
-	}
-	if err = db.Ping(); err != nil {
-		// panic(err)
-		db = nil
-	}
+	DB = connectToDB()
 }
 
-func GetDatabaseConnection() *sql.DB {
+func connectToDB() *sql.DB {
+	driverName := "postgres"
+	dataSourceName  := "postgresql://root@localhost:26257/snake_game_db?sslmode=disable"
+	// Connect to the "snake_game_db" database.
+	db, err := sql.Open(driverName, dataSourceName)
+	if err != nil {
+		panic(err)
+	}
+	if err = db.Ping(); err != nil {
+		panic(err)
+	}
 	return db
 }
