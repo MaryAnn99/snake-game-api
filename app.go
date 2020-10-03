@@ -9,25 +9,35 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/rs/cors"
+	"github.com/go-chi/chi/middleware"
 	_ "github.com/lib/pq"
 )
 
-func main() {
+func init() {
 	defer func() {
         if re := recover(); re != nil {
-			fmt.Println("Something went wrong")
+			fmt.Println("An error occurred while trying to connect to the database.")
         }
 	}()
+	cockroachdb.ConnectToDB()
+}
+
+func main() {
 	defer cockroachdb.DB.Close()
-	fmt.Println("Everything went correctly!")
+	fmt.Println("The server is running")
 	r := registerRoutes()
 	log.Fatal(http.ListenAndServe(":3060", r))
 }
 
 func registerRoutes() http.Handler {
 	r := chi.NewRouter()
-	// Allow all origins with all standard methods with any header and credentials.
-	r.Use(cors.AllowAll().Handler)
+
+	c := cors.New(cors.Options{
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
+		Debug: false,
+	})
+	r.Use(c.Handler)
+	r.Use(middleware.AllowContentType("application/json"))
 	r.Route("/records", func(r chi.Router) {
 		r.Get("/", routes.GetAllRecords)                //GET 	 /records
 		r.Get("/{username}", routes.GetRecord)       	//GET 	 /records/mich99
